@@ -1,0 +1,10 @@
+[
+  {
+    "question": "What is the formula for the area of a rectangle?",
+    "answer": "The area of a rectangle is calculated by multiplying its length by its width. The formula is A = l * w."
+  },
+  {
+    "question": "What are prime numbers?",
+    "answer": "A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself. Examples include 2, 3, 5, 7, 11, and 13."
+  }
+]
