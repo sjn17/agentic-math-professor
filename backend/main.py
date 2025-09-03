@@ -38,10 +38,55 @@ vector_store = Chroma(
     persist_directory=persist_directory,
     embedding_function=embeddings
 )
-web_search_tool = TavilySearchResults(k=3)
+#web_search_tool = TavilySearchResults(k=3)
 
 
 # --- 4. Define the Nodes and Decision Logic ---
+
+#---GUARDRAIL NODES---
+
+def input_guardrail(state):
+    """
+    Checks if the user's question is on-topic (mathematics).
+    This acts as the first line of defense.
+    """
+    print("---NODE: INPUT GUARDRAIL---")
+    question = state["question"]
+    
+    guardrail_prompt = f"""
+    You are a guardrail ensuring that a user's question is about mathematics.
+    Look at the question below. If it is a mathematical question (including concepts, problems, history, etc.), respond with 'yes'.
+    Otherwise, respond with 'no'.
+
+    Question: {question}
+
+    Response (yes/no):
+    """
+    decision = llm.invoke(guardrail_prompt)
+    
+    if "yes" in decision.content.lower():
+        print("---GUARDRAIL PASSED: QUESTION IS ABOUT MATH---")
+        return {"route_decision": "continue"}
+    else:
+        print("---GUARDRAIL FAILED: QUESTION IS NOT ABOUT MATH---")
+        # Provide a canned response and end the workflow immediately
+        return {
+            "generation": "I'm sorry, as a math professor, I can only answer questions about mathematics.",
+            "route_decision": "end"
+        }
+
+def output_guardrail(state):
+    """
+    Checks the generated answer for any harmful or inappropriate content.
+    This is the final check before sending the response to the user.
+    """
+    print("---NODE: OUTPUT GUARDRAIL---")
+    # For this assignment, we use a simple pass-through.
+    # In a real-world scenario, you would use an LLM or a moderation API
+    # to check for harmful content, refusal to answer, etc.
+    return {"generation": state["generation"]}
+
+# --- CORE AGENT NODES ---
 
 def retrieve_documents(state):
     print("---NODE: RETRIEVING DOCUMENTS WITH SCORES---")
@@ -78,11 +123,12 @@ def grade_documents_by_score(state):
 def web_search(state):
     print("---NODE: WEB SEARCH---")
     question = state["question"]
+    web_search_tool = TavilySearchResults(k=3)
     web_results = web_search_tool.invoke({"query": question})
     context = "\n".join([d["content"] for d in web_results])
     return {"context": context}
 
-def generate_answer(state):
+def generate_answer(state): 
     print("---NODE: GENERATING ANSWER---")
     question = state['question']
     context = state['context']
@@ -101,13 +147,25 @@ def decide_next_node(state):
 # --- 5. Build the Graph ---
 workflow = StateGraph(GraphState)
 
+workflow.add_node("input_guardrail", input_guardrail)
 workflow.add_node("retrieve", retrieve_documents)
 workflow.add_node("grade_documents", grade_documents_by_score) # Use the new score-based grader
 workflow.add_node("web_search", web_search)
 workflow.add_node("generate", generate_answer)
+workflow.add_node("output_guardrail", output_guardrail)
 
-workflow.set_entry_point("retrieve")
+workflow.set_entry_point("input_guardrail")
+workflow.add_conditional_edges(
+    "input_guardrail",
+    decide_next_node,
+    {
+        "continue": "retrieve",
+        "end": END,
+    },
+)   
+
 workflow.add_edge("retrieve", "grade_documents")
+
 workflow.add_conditional_edges(
     "grade_documents",
     decide_next_node,
@@ -117,7 +175,9 @@ workflow.add_conditional_edges(
     },
 )
 workflow.add_edge("web_search", "generate")
-workflow.add_edge("generate", END)
+
+workflow.add_edge("generate", "output_guardrail")
+workflow.add_edge("output_guardrail", END)
 
 graph_app = workflow.compile()
 

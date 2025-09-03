@@ -30,3 +30,10 @@ The agent follows a multi-step, conditional workflow managed by LangGraph:
 5.  **Generate**: Both paths converge at the `generate` node. Using the context gathered from either the knowledge base or the web search, the **Gemini 1.5 Flash** model generates the final, step-by-step mathematical explanation.
 
 This self-correcting pattern ensures that the agent always uses its local, curated knowledge base when possible but reliably falls back to a web search when necessary, fulfilling the core logic of the assignment.
+
+### AI Gateway & Guardrails
+
+[cite_start]To ensure the agent remains focused and safe, the workflow is wrapped with guardrails as required by the assignment[cite: 8, 9]. These are implemented as nodes within the LangGraph agent:
+
+* **Input Guardrail**: This is the new entry point for the agent. It uses an LLM call to classify the user's question. [cite_start]If the question is not about mathematics, the agent immediately stops and returns a polite refusal, ensuring it only provides educational content[cite: 11].
+* **Output Guardrail**: This is the final node before the agent finishes. It serves as a placeholder for a final check on the generated answer to scan for any inappropriate content, ensuring a safe user experience.
