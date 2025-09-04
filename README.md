@@ -37,3 +37,21 @@ This self-correcting pattern ensures that the agent always uses its local, curat
 
 * **Input Guardrail**: This is the new entry point for the agent. It uses an LLM call to classify the user's question. [cite_start]If the question is not about mathematics, the agent immediately stops and returns a polite refusal, ensuring it only provides educational content[cite: 11].
 * **Output Guardrail**: This is the final node before the agent finishes. It serves as a placeholder for a final check on the generated answer to scan for any inappropriate content, ensuring a safe user experience.
+
+### Human-in-the-Loop (HITL) Mechanism
+
+To fulfill the requirement for feedback-based learning, the system includes a complete Human-in-the-Loop workflow. This allows for the collection of user feedback and the refinement of answers.
+
+**Workflow:**
+
+1.  **Session ID Generation**: The `/ask` endpoint has been updated to return a unique `session_id` (using Python's `uuid` library) with every question-answer pair. This ID is crucial for tracking the specific interaction that feedback is being given for.
+
+2.  **Feedback Collection**: A new `/feedback` endpoint has been created. It is designed to receive the `session_id`, the original question and answer, and a specific user rating (`correct`, `incorrect`, or `clarify`).
+
+3.  **Data Logging**: All feedback is timestamped (in ISO 8601 format) and appended to a `feedback_log.json` file. This log file creates a structured dataset of human-validated interactions, which is the foundation for any future model fine-tuning or "self-learning" capabilities.
+
+4.  **Answer Refinement**: The `/feedback` endpoint contains logic to immediately act on user feedback:
+    * If feedback is `"incorrect"`, the agent uses a specific prompt to re-evaluate the problem and generate a corrected solution.
+    * If feedback is `"clarify"`, the agent uses a different prompt to rewrite the answer in simpler, more accessible terms.
+    * The refined answer is returned in the API response and is also saved to the `feedback_log.json` file, creating a direct link between the user's feedback and the improved result.
+    

@@ -1,16 +1,20 @@
 import os
 import uvicorn
 import requests
-from fastapi import FastAPI
+import uuid
+import json
+from datetime import datetime
+from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import TypedDict, List, Tuple
+from typing import TypedDict, List, Tuple, Literal
+
 from langchain_core.documents import Document
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
-from langchain_community.tools.tavily_search import TavilySearchResults
+
 
 # --- 1. Load Environment Variables and Initialize Models ---
 load_dotenv()
@@ -220,12 +224,97 @@ graph_app = workflow.compile()
 class Query(BaseModel):
     question: str
 
+class FeedbackQuery(BaseModel):
+    session_id: str
+    question: str
+    answer: str
+    feedback: Literal["correct", "incorrect","clarify"]
+        
 @app.post("/ask")
 async def ask_rag(query: Query):
+    
+    session_id = str(uuid.uuid4())
     inputs = {"question": query.question}
     result = graph_app.invoke(inputs)
-    return {"answer": result["generation"]}
+    return {
+        "session_id": session_id,
+        "question": query.question,
+        "answer": result["generation"]
+        }
 
+@app.post("/feedback")
+async def log_and_refine_feedback(feedback_data: FeedbackQuery):
+    print(f"---HITL: RECEIVED FEEDBACK: {feedback_data.feedback}---")
+    
+    log_file = "feedback_log.json"
+    
+    # Prepare the log entry
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "session_id": feedback_data.session_id,
+        "question": feedback_data.question,
+        "answer": feedback_data.answer,
+        "feedback": feedback_data.feedback,
+    }
+    
+    regenerated_answer = None
+
+    # Handle refinement based on feedback
+    if feedback_data.feedback == "incorrect":
+        print("---HITL: REGENERATING FOR 'INCORRECT' FEEDBACK---")
+        refinement_prompt = f"""
+        Your previous answer was marked incorrect by a human. Do not justify the old answer. Instead, carefully re-derive the solution step by step from first principles, double-checking every step.Provide only the corrected derivation.
+
+        Original Question: {feedback_data.question}
+        Your Incorrect Answer: {feedback_data.answer}
+
+        Corrected Answer:
+        """
+        regenerated_answer = llm.invoke(refinement_prompt).content
+        log_entry["regenerated_answer"] = regenerated_answer
+
+    elif feedback_data.feedback == "clarify":
+        print("---HITL: REGENERATING FOR 'CLARIFY' FEEDBACK---")
+        refinement_prompt = f"""
+        A student found your previous answer unclear. 
+        Please rewrite the explanation in simpler terms. Break it down into very easy-to-follow steps and include a simple example if possible.
+
+        Original Question: {feedback_data.question}
+        Your Unclear Answer: {feedback_data.answer}
+
+        Simpler, Clarified Answer:
+        """
+        regenerated_answer = llm.invoke(refinement_prompt).content
+        log_entry["regenerated_answer"] = regenerated_answer
+
+    # Append the log entry to the JSON file
+    try:
+        # Read existing data
+        try:
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logs = []
+        
+        # Append new log
+        logs.append(log_entry)
+        
+        # Write back to the file
+        with open(log_file, 'w') as f:
+            json.dump(logs, f, indent=2)
+            
+        print(f"---HITL: FEEDBACK LOGGED TO {log_file}---")
+
+    except Exception as e:
+        print(f"---HITL: FAILED TO LOG FEEDBACK. ERROR: {e}---")
+        raise HTTPException(status_code=500, detail="Failed to log feedback.")
+
+    # Prepare API response
+    response_data = {"status": "success", "logged_feedback": log_entry}
+    if regenerated_answer:
+        response_data["regenerated_answer"] = regenerated_answer
+        
+    return response_data
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
