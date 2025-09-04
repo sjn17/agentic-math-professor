@@ -1,10 +1,10 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_community.tools.tavily_search import TavilySearchResults
 from dotenv import load_dotenv
 
-# Load environment variables (specifically TAVILY_API_KEY)
 load_dotenv()
 
 # Initialize the FastAPI application for our tool server
@@ -13,6 +13,13 @@ app = FastAPI(
     description="Exposes web search capabilities as a separate, callable service.",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Define the expected input schema for our endpoint
 class TavilyInput(BaseModel):
     query: str

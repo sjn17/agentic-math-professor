@@ -208,3 +208,5 @@ __marimo__/
 
 # Ignore the local vector database
 backend/chroma_db/
+# Ignore generated log files
+backend/feedback_log.json

@@ -5,6 +5,7 @@ import uuid
 import json
 from datetime import datetime
 from fastapi import FastAPI,HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import TypedDict, List, Tuple, Literal
@@ -22,6 +23,14 @@ load_dotenv()
 app = FastAPI(
     title="Math Professor Agent API",
     description="An API for a self-correcting RAG agent."
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],    
 )
 
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
