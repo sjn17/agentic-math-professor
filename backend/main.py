@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -38,7 +39,6 @@ vector_store = Chroma(
     persist_directory=persist_directory,
     embedding_function=embeddings
 )
-#web_search_tool = TavilySearchResults(k=3)
 
 
 # --- 4. Define the Nodes and Decision Logic ---
@@ -121,11 +121,34 @@ def grade_documents_by_score(state):
         return {"route_decision": "web_search"}
 
 def web_search(state):
-    print("---NODE: WEB SEARCH---")
+    """
+    Acts as an MCP client to call the separate tool server for a web search.
+    This node is now decoupled from the actual search tool implementation.
+    """
+    print("---NODE: WEB SEARCH (via MCP)---")
     question = state["question"]
-    web_search_tool = TavilySearchResults(k=3)
-    web_results = web_search_tool.invoke({"query": question})
-    context = "\n".join([d["content"] for d in web_results])
+    
+    # The network address of our separate MCP tool server
+    mcp_server_url = "http://localhost:8001/invoke/tavily_search"
+    context = ""
+    
+    try:
+        # Make a POST request to the MCP server with the user's question
+        print(f"---MCP Client: Calling tool server at {mcp_server_url}---")
+        response = requests.post(mcp_server_url, json={"query": question})
+        response.raise_for_status()  # This will raise an exception for HTTP errors
+        
+        # Process the structured JSON response from the server
+        web_results = response.json().get("result", [])
+        
+        # Format the results into a clear context string for the LLM
+        context = "\n".join([f"URL: {d.get('url', '')}\nContent: {d.get('content', '')}" for d in web_results])
+        print("---MCP Client: Successfully received and processed results.---")
+
+    except requests.RequestException as e:
+        print(f"---MCP CLIENT ERROR: Could not connect to the tool server. Error: {e}---")
+        context = "Web search failed because the tool server could not be reached."
+
     return {"context": context}
 
 def generate_answer(state): 
@@ -133,7 +156,18 @@ def generate_answer(state):
     question = state['question']
     context = state['context']
     
-    template = "You are a helpful math professor. Your goal is to provide a clear, step-by-step solution to the user's question based on the context provided.\n\nCONTEXT:\n{context}\n\nQUESTION:\n{question}\n\nANSWER:"
+    template = """
+    You are a helpful math professor. Your goal is to provide a clear, step-by-step solution to the user's question.
+    Base your answer on the provided context. The context may be from a local knowledge base, or from a web search which will include URLs and content.
+
+    CONTEXT:
+    {context}
+
+    QUESTION:
+    {question}
+
+    ANSWER:
+    """
     prompt = PromptTemplate.from_template(template)
     rag_prompt = prompt.format(context=context, question=question)
     generation = llm.invoke(rag_prompt)
