@@ -22,16 +22,24 @@ load_dotenv()
 
 app = FastAPI(
     title="Math Professor Agent API",
-    description="An API for a self-correcting RAG agent."
+    description="An API for a self-correcting RAG agent.",
+    version="1.0.0"
 )
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],    
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
+
+# Health check endpoint
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Math Professor API is running"}
 
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")

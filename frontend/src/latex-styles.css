@@ -1,0 +1,38 @@
+/* LaTeX container styling */
+.katex-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0;
+  margin: 4px 0;
+}
+
+/* Block math (display mode) */
+.katex-display {
+  margin: 1em 0;
+  padding: 0.5em 0;
+  text-align: center;
+}
+
+/* Inline math */
+.katex {
+  font-size: 1.1em;
+  line-height: 1.6;
+}
+
+/* Ensure proper spacing around math elements */
+.katex-display + .katex-display {
+  margin-top: 0.5em;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .katex {
+    font-size: 1em;
+  }
+  
+  .katex-display {
+    margin: 0.5em 0;
+    padding: 0.25em 0;
+    font-size: 0.9em;
+  }
+}
