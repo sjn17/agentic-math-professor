@@ -3,7 +3,7 @@ import uvicorn
 import requests
 import uuid
 import json
-from datetime import datetime
+from datetime import timezone
 from fastapi import FastAPI,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -41,7 +41,7 @@ app.add_middleware(
 async def root():
     return {"status": "ok", "message": "Math Professor API is running"}
 
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
 
@@ -102,9 +102,6 @@ def output_guardrail(state):
     This is the final check before sending the response to the user.
     """
     print("---NODE: OUTPUT GUARDRAIL---")
-    # For this assignment, we use a simple pass-through.
-    # In a real-world scenario, you would use an LLM or a moderation API
-    # to check for harmful content, refusal to answer, etc.
     return {"generation": state["generation"]}
 
 # --- CORE AGENT NODES ---
@@ -267,7 +264,7 @@ async def log_and_refine_feedback(feedback_data: FeedbackQuery):
     
     # Prepare the log entry
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "session_id": feedback_data.session_id,
         "question": feedback_data.question,
         "answer": feedback_data.answer,

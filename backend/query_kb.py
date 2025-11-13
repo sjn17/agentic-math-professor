@@ -1,35 +1,51 @@
+import random
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 
-def query_db(query):
+def view_random_db_content():
     """
-    Queries the ChromaDB and prints the results.
+    Connects to ChromaDB and retrieves 5 random entries.
     """
     print("Initializing DB and embeddings...")
     load_dotenv()
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     persist_directory = 'chroma_db'
-
+    
     vector_store = Chroma(
         persist_directory=persist_directory,
         embedding_function=embeddings
     )
 
-    print(f"\n--- Querying for: '{query}' ---")
-    results = vector_store.similarity_search_with_score(query, k=3)
+    print("\n--- Retrieving entries to select 5 random ones ---")
+    
+    # The .get() method retrieves all entries from the database.
+    results = vector_store.get() 
+    
+    documents = results.get('documents', [])
+    metadatas = results.get('metadatas', [])
 
-    if not results:
-        print("No results found.")
+    if not documents:
+        print("No documents found in the database.")
         return
 
-    print(f"Found {len(results)} results:\n")
-    for i, (doc, score) in enumerate(results):
-        print(f"--- Result {i+1} (Score: {score:.4f}) ---")
-        print(f"Content: {doc.page_content}")
-        print(f"Metadata: {doc.metadata}\n")
+    # Combine documents and metadatas into a single list to sample from
+    all_entries = list(zip(documents, metadatas))
+
+    sample_size = 5
+    if len(all_entries) < sample_size:
+        print(f"Database has fewer than {sample_size} entries. Showing all {len(all_entries)}.")
+        random_entries = all_entries
+    else:
+        # Select 5 random entries from the list
+        random_entries = random.sample(all_entries, sample_size)
+
+    print(f"\nShowing {len(random_entries)} random entries from the database:\n")
+    for i, (doc, meta) in enumerate(random_entries):
+        print(f"--- Random Entry {i+1} ---")
+        print(f"Content: {doc}")
+        print(f"Metadata: {meta}\n")
+
 
 if __name__ == "__main__":
-    # Example query based on the content of the ASDiv dataset
-    sample_query = "If a maîtresse has 8 students and she gives each student 3 pencils, how many pencils will she give in total?"
-    query_db(sample_query)
+    view_random_db_content()
